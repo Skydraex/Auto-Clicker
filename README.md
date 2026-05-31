@@ -42,6 +42,19 @@ python auto_clicker.py
 4. Position your cursor where you want to click and press the hotkey (or click
    **Start**) to toggle clicking on/off.
 
+## Releasing
+
+Versions are driven by the [`VERSION`](VERSION) file (e.g. `1.1.0`) — the
+single source of truth. To cut a new release:
+
+1. Bump the number in `VERSION` (and commit it).
+2. Push to `master`.
+
+CI builds the Windows `.exe`, tags it `vX.Y.Z`, and publishes it as the
+**latest release**. The number in `VERSION` is also embedded in the binary.
+(You can also push a `vX.Y.Z` git tag, or run the workflow manually with a tag
+override.)
+
 ## Notes
 
 - **Linux**: `pynput` requires an X server. Under Wayland, global hotkey and

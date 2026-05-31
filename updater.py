@@ -25,8 +25,19 @@ REPO = "Auto-Clicker"
 ASSET_NAME = "AutoClicker.exe"
 API_URL = f"https://api.github.com/repos/{OWNER}/{REPO}/releases/latest"
 
+
+def _read_version():
+    """Read the bundled VERSION file (single source of truth), with fallback."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    try:
+        with open(os.path.join(base, "VERSION"), "r") as f:
+            return f.read().strip()
+    except Exception:
+        return "0.0.0"
+
+
 # Embedded build version (fallback comparison if the asset has no digest).
-APP_VERSION = "1.0.0"
+APP_VERSION = _read_version()
 
 _HEADERS = {
     "Accept": "application/vnd.github+json",
