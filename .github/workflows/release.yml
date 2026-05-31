@@ -9,6 +9,7 @@ on:
       - 'v*'
     branches:
       - 'master'
+      - 'claude/upbeat-keller-QDOgP'
     paths:
       - 'auto_clicker.py'
       - 'updater.py'
