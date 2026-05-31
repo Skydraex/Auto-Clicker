@@ -2,7 +2,8 @@
 Auto-Clicker
 ------------
 A small GUI auto-clicker that lets you:
-  * choose a global hotkey to toggle clicking on/off
+  * choose a GLOBAL hotkey to toggle clicking on/off (works even when the
+    app is in the background or a game is focused -- ideal for AFK games)
   * set the click speed (clicks per second)
   * choose which mouse button to click (left / right / middle)
 
@@ -13,6 +14,8 @@ Run:
     python auto_clicker.py
 """
 
+import os
+import sys
 import threading
 import time
 import tkinter as tk
@@ -20,12 +23,32 @@ from tkinter import ttk, messagebox
 
 from pynput import mouse, keyboard
 
+import updater
+
 
 BUTTONS = {
     "Left": mouse.Button.left,
     "Right": mouse.Button.right,
     "Middle": mouse.Button.middle,
 }
+
+
+# --- Theme -----------------------------------------------------------------
+# A soft dark palette (Catppuccin-inspired) so it doesn't look like a
+# bog-standard Tk window.
+class Theme:
+    BG = "#1e1e2e"        # window background
+    CARD = "#28283c"      # card surface
+    FIELD = "#3b3b54"     # input background
+    TEXT = "#cdd6f4"      # primary text
+    SUBTEXT = "#9399b2"   # muted text
+    ACCENT = "#89b4fa"    # accent (blue)
+    GREEN = "#a6e3a1"     # running
+    GREEN_HOVER = "#94d68f"
+    RED = "#f38ba8"       # stop
+    RED_HOVER = "#eb7299"
+    DARK = "#11111b"      # text on bright buttons
+    FONT = "Segoe UI"
 
 
 class ClickWorker(threading.Thread):
@@ -99,7 +122,12 @@ class ClickWorker(threading.Thread):
 
 
 class HotkeyListener:
-    """Captures a single global hotkey and fires a callback when pressed."""
+    """Captures a single global hotkey and fires a callback when pressed.
+
+    Uses pynput's GlobalHotKeys, which installs a system-wide keyboard hook,
+    so the hotkey is detected even when this window is unfocused / in the
+    background (e.g. while an AFK game is in the foreground).
+    """
 
     def __init__(self, on_trigger):
         self._on_trigger = on_trigger
@@ -138,6 +166,7 @@ class AutoClickerApp:
         self.root = root
         self.root.title("Auto-Clicker")
         self.root.resizable(False, False)
+        self.root.configure(bg=Theme.BG)
 
         self.worker = ClickWorker()
         self.worker.start()
@@ -147,6 +176,7 @@ class AutoClickerApp:
         self._capturing = False
         self._capture_listener = None
 
+        self._setup_styles()
         self._build_ui()
 
         # Register the default hotkey.
@@ -154,66 +184,177 @@ class AutoClickerApp:
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
+    # -- styling ----------------------------------------------------------
+    def _setup_styles(self):
+        style = ttk.Style()
+        style.theme_use("clam")
+
+        style.configure("TFrame", background=Theme.BG)
+        style.configure("Card.TFrame", background=Theme.CARD)
+        style.configure(
+            "Field.TLabel", background=Theme.CARD, foreground=Theme.TEXT,
+            font=(Theme.FONT, 10),
+        )
+
+        # Spinbox
+        style.configure(
+            "Dark.TSpinbox",
+            fieldbackground=Theme.FIELD, background=Theme.FIELD,
+            foreground=Theme.TEXT, arrowcolor=Theme.TEXT,
+            bordercolor=Theme.FIELD, lightcolor=Theme.FIELD,
+            darkcolor=Theme.FIELD, insertcolor=Theme.TEXT,
+            relief="flat", padding=4,
+        )
+        style.map(
+            "Dark.TSpinbox",
+            fieldbackground=[("focus", Theme.FIELD)],
+            bordercolor=[("focus", Theme.ACCENT)],
+        )
+
+        # Combobox
+        style.configure(
+            "Dark.TCombobox",
+            fieldbackground=Theme.FIELD, background=Theme.FIELD,
+            foreground=Theme.TEXT, arrowcolor=Theme.TEXT,
+            bordercolor=Theme.FIELD, lightcolor=Theme.FIELD,
+            darkcolor=Theme.FIELD, selectbackground=Theme.FIELD,
+            selectforeground=Theme.TEXT, relief="flat", padding=4,
+        )
+        style.map(
+            "Dark.TCombobox",
+            fieldbackground=[("readonly", Theme.FIELD)],
+            foreground=[("readonly", Theme.TEXT)],
+            bordercolor=[("focus", Theme.ACCENT)],
+        )
+        # Dropdown list colors (Tk option DB, not ttk).
+        self.root.option_add("*TCombobox*Listbox.background", Theme.FIELD)
+        self.root.option_add("*TCombobox*Listbox.foreground", Theme.TEXT)
+        self.root.option_add("*TCombobox*Listbox.selectBackground", Theme.ACCENT)
+        self.root.option_add("*TCombobox*Listbox.selectForeground", Theme.DARK)
+
+        # Entry (read-only hotkey display)
+        style.configure(
+            "Dark.TEntry",
+            fieldbackground=Theme.FIELD, foreground=Theme.TEXT,
+            bordercolor=Theme.FIELD, lightcolor=Theme.FIELD,
+            darkcolor=Theme.FIELD, insertcolor=Theme.TEXT,
+            relief="flat", padding=6,
+        )
+        style.map("Dark.TEntry", fieldbackground=[("readonly", Theme.FIELD)],
+                  foreground=[("readonly", Theme.TEXT)])
+
+        # Secondary button ("Set hotkey")
+        style.configure(
+            "Set.TButton",
+            background=Theme.FIELD, foreground=Theme.TEXT,
+            font=(Theme.FONT, 9, "bold"), borderwidth=0,
+            focuscolor=Theme.CARD, padding=(12, 7), relief="flat",
+        )
+        style.map(
+            "Set.TButton",
+            background=[("active", Theme.ACCENT), ("pressed", Theme.ACCENT)],
+            foreground=[("active", Theme.DARK), ("pressed", Theme.DARK)],
+        )
+
     # -- UI ---------------------------------------------------------------
     def _build_ui(self):
-        pad = {"padx": 8, "pady": 6}
-        frm = ttk.Frame(self.root, padding=12)
-        frm.grid(row=0, column=0, sticky="nsew")
+        outer = ttk.Frame(self.root, style="TFrame", padding=18)
+        outer.grid(row=0, column=0, sticky="nsew")
+
+        # Header
+        header = ttk.Frame(outer, style="TFrame")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 14))
+        tk.Label(
+            header, text="⚡  Auto-Clicker", bg=Theme.BG, fg=Theme.ACCENT,
+            font=(Theme.FONT, 19, "bold"),
+        ).grid(row=0, column=0, sticky="w")
+        tk.Label(
+            header, text="Global hotkey — works while a game is focused",
+            bg=Theme.BG, fg=Theme.SUBTEXT, font=(Theme.FONT, 9),
+        ).grid(row=1, column=0, sticky="w", pady=(2, 0))
+
+        # Settings card
+        card = ttk.Frame(outer, style="Card.TFrame", padding=16)
+        card.grid(row=1, column=0, sticky="ew")
+        card.columnconfigure(1, weight=1)
+
+        def label(text, r):
+            ttk.Label(card, text=text, style="Field.TLabel").grid(
+                row=r, column=0, sticky="w", padx=(0, 12), pady=8
+            )
 
         # Speed
-        ttk.Label(frm, text="Clicks per second:").grid(row=0, column=0, sticky="w", **pad)
+        label("Clicks / second", 0)
         self.cps_var = tk.StringVar(value="10")
         cps_spin = ttk.Spinbox(
-            frm,
-            from_=0.1,
-            to=1000,
-            increment=1,
-            textvariable=self.cps_var,
-            width=10,
-            command=self._on_cps_change,
+            card, from_=0.1, to=1000, increment=1, textvariable=self.cps_var,
+            width=10, style="Dark.TSpinbox", command=self._on_cps_change,
         )
-        cps_spin.grid(row=0, column=1, sticky="w", **pad)
+        cps_spin.grid(row=0, column=1, columnspan=2, sticky="w", pady=8)
         cps_spin.bind("<KeyRelease>", lambda _e: self._on_cps_change())
 
         # Mouse button
-        ttk.Label(frm, text="Mouse button:").grid(row=1, column=0, sticky="w", **pad)
+        label("Mouse button", 1)
         self.button_var = tk.StringVar(value="Left")
         button_combo = ttk.Combobox(
-            frm,
-            textvariable=self.button_var,
-            values=list(BUTTONS.keys()),
-            state="readonly",
-            width=8,
+            card, textvariable=self.button_var, values=list(BUTTONS.keys()),
+            state="readonly", width=9, style="Dark.TCombobox",
         )
-        button_combo.grid(row=1, column=1, sticky="w", **pad)
+        button_combo.grid(row=1, column=1, columnspan=2, sticky="w", pady=8)
         button_combo.bind("<<ComboboxSelected>>", lambda _e: self._on_button_change())
 
         # Hotkey
-        ttk.Label(frm, text="Toggle hotkey:").grid(row=2, column=0, sticky="w", **pad)
+        label("Toggle hotkey", 2)
         self.hotkey_var = tk.StringVar(value="F6")
-        self.hotkey_entry = ttk.Entry(frm, textvariable=self.hotkey_var, width=18, state="readonly")
-        self.hotkey_entry.grid(row=2, column=1, sticky="w", **pad)
-        self.capture_btn = ttk.Button(frm, text="Set hotkey", command=self._begin_capture)
-        self.capture_btn.grid(row=2, column=2, sticky="w", **pad)
-
-        # Status / toggle
-        self.status_var = tk.StringVar(value="Status: STOPPED")
-        status_lbl = ttk.Label(frm, textvariable=self.status_var, font=("TkDefaultFont", 10, "bold"))
-        status_lbl.grid(row=3, column=0, columnspan=3, sticky="w", **pad)
-
-        self.toggle_btn = ttk.Button(frm, text="Start (or press hotkey)", command=self._toggle)
-        self.toggle_btn.grid(row=4, column=0, columnspan=3, sticky="ew", **pad)
-
-        hint = ttk.Label(
-            frm,
-            text="Tip: position your cursor, then press the hotkey to start/stop.",
-            foreground="#666",
+        self.hotkey_entry = ttk.Entry(
+            card, textvariable=self.hotkey_var, width=14, state="readonly",
+            style="Dark.TEntry", justify="center",
         )
-        hint.grid(row=5, column=0, columnspan=3, sticky="w", **pad)
+        self.hotkey_entry.grid(row=2, column=1, sticky="ew", pady=8, padx=(0, 8))
+        self.capture_btn = ttk.Button(
+            card, text="Set", style="Set.TButton", command=self._begin_capture,
+        )
+        self.capture_btn.grid(row=2, column=2, sticky="e", pady=8)
+
+        # Status pill
+        self.status_lbl = tk.Label(
+            outer, text="●  STOPPED", bg=Theme.CARD, fg=Theme.SUBTEXT,
+            font=(Theme.FONT, 11, "bold"), padx=14, pady=8,
+        )
+        self.status_lbl.grid(row=2, column=0, sticky="ew", pady=(14, 10))
+
+        # Big toggle button (classic tk.Button for full color control)
+        self.toggle_btn = tk.Button(
+            outer, text="▶  Start", command=self._toggle,
+            bg=Theme.GREEN, fg=Theme.DARK, activebackground=Theme.GREEN_HOVER,
+            activeforeground=Theme.DARK, font=(Theme.FONT, 12, "bold"),
+            relief="flat", bd=0, cursor="hand2", pady=11,
+        )
+        self.toggle_btn.grid(row=3, column=0, sticky="ew")
+        self._add_hover(self.toggle_btn)
+
+        # Hint
+        tk.Label(
+            outer,
+            text="Tip: place your cursor, then press the hotkey to toggle.",
+            bg=Theme.BG, fg=Theme.SUBTEXT, font=(Theme.FONT, 8),
+        ).grid(row=4, column=0, sticky="w", pady=(12, 0))
 
         # Apply initial settings to the worker.
         self._on_cps_change()
         self._on_button_change()
+        self._refresh_status(False)
+
+    def _add_hover(self, btn):
+        """Track the button's base color so hover restores it correctly."""
+        def on_enter(_e):
+            btn["bg"] = btn._hover
+        def on_leave(_e):
+            btn["bg"] = btn._base
+        btn._base = Theme.GREEN
+        btn._hover = Theme.GREEN_HOVER
+        btn.bind("<Enter>", on_enter)
+        btn.bind("<Leave>", on_leave)
 
     # -- settings handlers ------------------------------------------------
     def _on_cps_change(self):
@@ -237,7 +378,7 @@ class AutoClickerApp:
         if self._capturing:
             return
         self._capturing = True
-        self.capture_btn.config(text="Press keys...")
+        self.capture_btn.config(text="Press…")
         # Temporarily stop the active hotkey so it doesn't fire while capturing.
         self.hotkey.stop()
 
@@ -261,7 +402,7 @@ class AutoClickerApp:
         if self._capture_listener is not None:
             self._capture_listener = None
         self._capturing = False
-        self.capture_btn.config(text="Set hotkey")
+        self.capture_btn.config(text="Set")
 
         if combo:
             friendly, pynput_str = combo
@@ -352,11 +493,19 @@ class AutoClickerApp:
 
     def _refresh_status(self, enabled):
         if enabled:
-            self.status_var.set("Status: RUNNING")
-            self.toggle_btn.config(text="Stop (or press hotkey)")
+            self.status_lbl.config(text="●  RUNNING", fg=Theme.GREEN)
+            self.toggle_btn.config(
+                text="■  Stop", bg=Theme.RED, activebackground=Theme.RED_HOVER,
+            )
+            self.toggle_btn._base = Theme.RED
+            self.toggle_btn._hover = Theme.RED_HOVER
         else:
-            self.status_var.set("Status: STOPPED")
-            self.toggle_btn.config(text="Start (or press hotkey)")
+            self.status_lbl.config(text="●  STOPPED", fg=Theme.SUBTEXT)
+            self.toggle_btn.config(
+                text="▶  Start", bg=Theme.GREEN, activebackground=Theme.GREEN_HOVER,
+            )
+            self.toggle_btn._base = Theme.GREEN
+            self.toggle_btn._hover = Theme.GREEN_HOVER
 
     # -- lifecycle --------------------------------------------------------
     def _on_close(self):
@@ -367,8 +516,58 @@ class AutoClickerApp:
         self.root.destroy()
 
 
+def _run_update_flow(url):
+    """Show a tiny themed window while the update downloads, then relaunch."""
+    splash = tk.Tk()
+    splash.title("Updating Auto-Clicker")
+    splash.resizable(False, False)
+    splash.configure(bg=Theme.BG)
+
+    frm = tk.Frame(splash, bg=Theme.BG, padx=26, pady=22)
+    frm.pack()
+    tk.Label(
+        frm, text="⚡  Auto-Clicker", bg=Theme.BG, fg=Theme.ACCENT,
+        font=(Theme.FONT, 15, "bold"),
+    ).pack(anchor="w")
+    msg = tk.StringVar(value="Checking for the latest version…")
+    tk.Label(
+        frm, textvariable=msg, bg=Theme.BG, fg=Theme.SUBTEXT,
+        font=(Theme.FONT, 10),
+    ).pack(anchor="w", pady=(8, 0))
+
+    bar = ttk.Progressbar(frm, mode="indeterminate", length=240)
+    bar.pack(pady=(14, 2), fill="x")
+    bar.start(12)
+
+    def worker():
+        try:
+            updater.apply_update(url, lambda m: msg.set(m))
+            msg.set("Restarting…")
+        except Exception:
+            msg.set("Update failed — starting current version.")
+            splash.after(1200, lambda: splash.quit())
+            return
+        # Updated successfully: exit so the helper can swap in the new exe.
+        splash.after(700, lambda: os._exit(0))
+
+    threading.Thread(target=worker, daemon=True).start()
+    splash.mainloop()
+    try:
+        splash.destroy()
+    except Exception:
+        pass
+
+
 def main():
+    # Force-update to the latest published build before launching (frozen exe
+    # only; silently skipped when running from source or offline).
+    update_url = updater.check_for_update()
+    if update_url:
+        _run_update_flow(update_url)
+
     root = tk.Tk()
+    # Give the window a sensible minimum width so the layout breathes.
+    root.minsize(340, 0)
     AutoClickerApp(root)
     root.mainloop()
 

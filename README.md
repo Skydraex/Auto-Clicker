@@ -1,11 +1,16 @@
 # Auto-Clicker
 
-A simple cross-platform auto-clicker with a GUI. You can:
+A simple cross-platform auto-clicker with a clean dark GUI. You can:
 
-- **Choose a global hotkey** to toggle clicking on and off (works even when the
-  window is not focused).
+- **Choose a global hotkey** to toggle clicking on and off. It uses a
+  system-wide keyboard hook, so it fires **even when the window is in the
+  background or a game is focused** — ideal for AFK games.
 - **Set the click speed** in clicks per second (CPS).
 - **Pick the mouse button** to click (left / right / middle).
+
+The Windows build also **auto-updates**: on launch it checks the latest
+GitHub release and, if the published binary has changed, downloads it and
+relaunches automatically.
 
 ## Requirements
 

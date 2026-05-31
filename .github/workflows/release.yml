@@ -8,9 +8,10 @@ on:
     tags:
       - 'v*'
     branches:
-      - 'claude/upbeat-keller-QDOgP'
+      - 'master'
     paths:
       - 'auto_clicker.py'
+      - 'updater.py'
       - 'requirements.txt'
       - '.github/workflows/release.yml'
   workflow_dispatch:
