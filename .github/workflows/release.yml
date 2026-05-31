@@ -7,6 +7,12 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - 'claude/upbeat-keller-QDOgP'
+    paths:
+      - 'auto_clicker.py'
+      - 'requirements.txt'
+      - '.github/workflows/release.yml'
   workflow_dispatch:
     inputs:
       tag:
@@ -49,8 +55,8 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          name: Auto-Clicker ${{ github.event.inputs.tag || github.ref_name }}
+          tag_name: ${{ github.event.inputs.tag || (github.ref_type == 'tag' && github.ref_name) || 'v1.0.0' }}
+          name: Auto-Clicker ${{ github.event.inputs.tag || (github.ref_type == 'tag' && github.ref_name) || 'v1.0.0' }}
           files: dist/AutoClicker.exe
           make_latest: true
           generate_release_notes: true
